@@ -51,7 +51,7 @@ install_requires = [
     # transitive dependencies:
     #   urllib3: MIT
     #   aiohttp: Apache 2.0
-    "elasticsearch[async]==7.8.0",
+    "elasticsearch[async]==7.9.0",
     # License: BSD
     "psutil==5.7.0",
     # License: MIT
@@ -83,7 +83,8 @@ install_requires = [
 ]
 
 tests_require = [
-    "pytest==5.2.0",
+    "pytest==5.4.0",
+    "pytest-asyncio==0.14.0",
     "pytest-benchmark==3.2.2"
 ]
 

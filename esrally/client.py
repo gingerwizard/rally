@@ -179,6 +179,11 @@ class EsClientFactory:
                 ctx = RallyAsyncElasticsearch.request_context.get()
                 ctx["raw_response"] = True
 
+            def noop(self, request_start=None, request_end=None):
+                ctx = RallyAsyncElasticsearch.request_context.get()
+                ctx["request_end"] = time.perf_counter()
+                ctx["request_start"] = time.perf_counter()
+
         return RallyAsyncElasticsearch(hosts=self.hosts,
                                        connection_class=esrally.async_connection.AIOHttpConnection,
                                        ssl_context=self.ssl_context,
