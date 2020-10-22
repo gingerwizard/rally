@@ -55,9 +55,7 @@ def register_default_runners():
     register_runner(track.OperationType.DeleteIndexTemplate.name, Retry(DeleteIndexTemplate()), async_runner=True)
     register_runner(track.OperationType.CreateComponentTemplate.name, Retry(CreateComponentTemplate()), async_runner=True)
     register_runner(track.OperationType.DeleteComponentTemplate.name, Retry(DeleteComponentTemplate()), async_runner=True)
-    register_runner(track.OperationType.CreateComposableTemplate.name, Retry(CreateComposableTemplate()),
-                    async_runner=True)
-
+    register_runner(track.OperationType.CreateComposableTemplate.name, Retry(CreateComposableTemplate()), async_runner=True)
     register_runner(track.OperationType.ShrinkIndex.name, Retry(ShrinkIndex()), async_runner=True)
     register_runner(track.OperationType.CreateMlDatafeed.name, Retry(CreateMlDatafeed()), async_runner=True)
     register_runner(track.OperationType.DeleteMlDatafeed.name, Retry(DeleteMlDatafeed()), async_runner=True)
