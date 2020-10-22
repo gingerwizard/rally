@@ -25,6 +25,7 @@ from collections import Counter, OrderedDict
 from copy import deepcopy
 
 import ijson
+from elasticsearch.client import _make_path
 
 from esrally import exceptions, track
 
@@ -52,6 +53,11 @@ def register_default_runners():
     register_runner(track.OperationType.DeleteIndex.name, Retry(DeleteIndex()), async_runner=True)
     register_runner(track.OperationType.CreateIndexTemplate.name, Retry(CreateIndexTemplate()), async_runner=True)
     register_runner(track.OperationType.DeleteIndexTemplate.name, Retry(DeleteIndexTemplate()), async_runner=True)
+    register_runner(track.OperationType.CreateComponentTemplate.name, Retry(CreateComponentTemplate()), async_runner=True)
+    register_runner(track.OperationType.DeleteComponentTemplate.name, Retry(DeleteComponentTemplate()), async_runner=True)
+    register_runner(track.OperationType.CreateComposableTemplate.name, Retry(CreateComposableTemplate()),
+                    async_runner=True)
+
     register_runner(track.OperationType.ShrinkIndex.name, Retry(ShrinkIndex()), async_runner=True)
     register_runner(track.OperationType.CreateMlDatafeed.name, Retry(CreateMlDatafeed()), async_runner=True)
     register_runner(track.OperationType.DeleteMlDatafeed.name, Retry(DeleteMlDatafeed()), async_runner=True)
@@ -1056,6 +1062,99 @@ class DeleteIndex(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "delete-index"
+
+
+class CreateComponentTemplate(Runner):
+    """
+    Execute the `PUT index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-component-template.html>`_.
+    """
+
+    async def __call__(self, es, params):
+        templates = mandatory(params, "templates", self)
+        request_params = params.get("request-params", {})
+        for template, body in templates:
+            await es.cluster.put_component_template(name=template, body=body,
+                                                    params=request_params)
+        return len(templates), "ops"
+
+    def __repr__(self, *args, **kwargs):
+        return "create-component-template"
+
+
+class DeleteComponentTemplate(Runner):
+    """
+    Execute the `PUT index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-component-template.html>`_.
+    """
+
+    async def __call__(self, es, params):
+        template_names = mandatory(params, "templates", self)
+        only_if_exists = params.get("only-if-exists", False)
+        request_params = params.get("request-params", {})
+        ops_count = 0
+        for template_name in template_names:
+            if not only_if_exists:
+                await es.cluster.delete_component_template(name=template_name, params=request_params, ignore=[404])
+                ops_count += 1
+            elif only_if_exists and await self._exists(template_name):
+                self.logger.info("Component Index template [%s] already exists. Deleting it.", template_name)
+                await es.cluster.delete_component_template(name=template_name, params=request_params)
+                ops_count += 1
+        return ops_count, "ops"
+
+    async def _exists(self, name):
+        return await self.transport.perform_request(
+            "HEAD", _make_path("_component_template", name)
+        )
+
+    def __repr__(self, *args, **kwargs):
+        return "delete-component-template"
+
+
+class CreateComposableTemplate(Runner):
+    """
+    Execute the `PUT index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-put-template.html>`_.
+    """
+
+    async def __call__(self, es, params):
+        templates = mandatory(params, "templates", self)
+        request_params = params.get("request-params", {})
+        for template, body in templates:
+            await es.cluster.put_index_template(name=template, body=body,
+                                                    params=request_params)
+        return len(templates), "ops"
+
+    def __repr__(self, *args, **kwargs):
+        return "create-composable-template"
+
+
+class DeleteComposableTemplate(Runner):
+    """
+    Execute the `PUT index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-template.html>`_.
+    """
+
+    async def __call__(self, es, params):
+        template_names = mandatory(params, "templates", self)
+        only_if_exists = params.get("only-if-exists", False)
+        request_params = params.get("request-params", {})
+        ops_count = 0
+
+        for template_name, delete_matching_indices, index_pattern in template_names:
+            if not only_if_exists:
+                await es.indices.delete_index_template(name=template_name, params=request_params, ignore=[404])
+                ops_count += 1
+            elif only_if_exists and await es.indices.exists_template(template_name):
+                self.logger.info("Composable Index template [%s] already exists. Deleting it.", template_name)
+                await es.indices.delete_index_template(name=template_name, params=request_params)
+                ops_count += 1
+            # ensure that we do not provide an empty index pattern by accident
+            if delete_matching_indices and index_pattern:
+                await es.indices.delete(index=index_pattern)
+                ops_count += 1
+
+        return ops_count, "ops"
+
+    def __repr__(self, *args, **kwargs):
+        return "delete-composable-template"
 
 
 class CreateIndexTemplate(Runner):
