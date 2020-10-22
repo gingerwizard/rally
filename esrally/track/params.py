@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+import collections
 import logging
 import math
 import numbers
@@ -322,35 +322,37 @@ class DeleteComponentTemplateParamSource(ParamSource):
                 template = params["template"]
                 self.template_definitions.append(template)
             except KeyError:
-                raise exceptions.InvalidSyntax(f"Please set the property 'template' for the {kwargs.get('operation-type')} operation")
+                raise exceptions.InvalidSyntax(f"Please set the property 'template' for the {params.get('operation-type')} operation.")
 
     def params(self):
         return {
             "templates": self.template_definitions,
+            "only-if-exists": self.only_if_exists,
             "request-params": self.request_params
         }
 
 
 class CreateComposableTemplateParamSource(ParamSource):
-    def __init__(self, track, params, **kwargs):
+    def __init__(self, track, params, templates=None, **kwargs):
+        templates = track.composable_templates if templates is None else templates
         super().__init__(track, params, **kwargs)
         self.request_params = params.get("request-params", {})
         self.template_definitions = []
         if "template" in params and "body" in params:
             self.template_definitions.append((params["template"], params["body"]))
-        elif track.composable_templates:
+        elif templates:
             filter_template = params.get("template")
             settings = params.get("settings")
-            for template in track.composable_templates:
+            for template in templates:
                 if not filter_template or template.name == filter_template:
                     body = template.content
                     if body and "template" in body:
                         body = CreateComposableTemplateParamSource._create_or_merge(template.content,
                                                                                     ["template", "settings"], settings)
-                        self.template_definitions.append(template.name, body)
+                        self.template_definitions.append((template.name, body))
         else:
             raise exceptions.InvalidSyntax("Please set the properties 'template' and 'body' for the "
-                                           f"{kwargs.get('operation-type')} operation or declare composable and/or component "
+                                           f"{params.get('operation-type')} operation or declare composable and/or component "
                                            "templates in the track")
 
     @staticmethod
@@ -364,12 +366,24 @@ class CreateComposableTemplateParamSource(ParamSource):
             CreateComposableTemplateParamSource.__merge(content, new_content)
         return original_content
 
+    @staticmethod
+    def __merge(dct, merge_dct):
+        for k, v in merge_dct.items():
+            if (k in dct and isinstance(dct[k], dict)
+                    and isinstance(merge_dct[k], collections.Mapping)):
+                CreateComposableTemplateParamSource.__merge(dct[k], merge_dct[k])
+            else:
+                dct[k] = merge_dct[k]
+
     def params(self):
         return {
             "templates": self.template_definitions,
             "request-params": self.request_params
         }
 
+class CreateComponentTemplateParamSource(CreateComposableTemplateParamSource):
+    def __init__(self, track, params, **kwargs):
+        super().__init__(track, params, templates=track.component_templates, **kwargs)
 
 # TODO #365: This contains "body-params" as an undocumented feature. Get more experience and expand it to make it actually usable.
 #
@@ -1088,7 +1102,7 @@ register_param_source_for_operation(track.OperationType.CreateIndex, CreateIndex
 register_param_source_for_operation(track.OperationType.DeleteIndex, DeleteIndexParamSource)
 register_param_source_for_operation(track.OperationType.CreateIndexTemplate, CreateIndexTemplateParamSource)
 register_param_source_for_operation(track.OperationType.DeleteIndexTemplate, DeleteIndexTemplateParamSource)
-register_param_source_for_operation(track.OperationType.CreateComponentTemplate, CreateComposableTemplateParamSource)
+register_param_source_for_operation(track.OperationType.CreateComponentTemplate, CreateComponentTemplateParamSource)
 register_param_source_for_operation(track.OperationType.DeleteComponentTemplate, DeleteComponentTemplateParamSource)
 register_param_source_for_operation(track.OperationType.CreateComposableTemplate, CreateComposableTemplateParamSource)
 register_param_source_for_operation(track.OperationType.DeleteComposableTemplate, DeleteIndexTemplateParamSource)

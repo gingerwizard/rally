@@ -56,6 +56,7 @@ def register_default_runners():
     register_runner(track.OperationType.CreateComponentTemplate.name, Retry(CreateComponentTemplate()), async_runner=True)
     register_runner(track.OperationType.DeleteComponentTemplate.name, Retry(DeleteComponentTemplate()), async_runner=True)
     register_runner(track.OperationType.CreateComposableTemplate.name, Retry(CreateComposableTemplate()), async_runner=True)
+    register_runner(track.OperationType.DeleteComposableTemplate.name, Retry(DeleteComposableTemplate()), async_runner=True)
     register_runner(track.OperationType.ShrinkIndex.name, Retry(ShrinkIndex()), async_runner=True)
     register_runner(track.OperationType.CreateMlDatafeed.name, Retry(CreateMlDatafeed()), async_runner=True)
     register_runner(track.OperationType.DeleteMlDatafeed.name, Retry(DeleteMlDatafeed()), async_runner=True)
@@ -1088,21 +1089,22 @@ class DeleteComponentTemplate(Runner):
         template_names = mandatory(params, "templates", self)
         only_if_exists = params.get("only-if-exists", False)
         request_params = params.get("request-params", {})
+
+        async def _exists(name):
+            return await es.transport.perform_request(
+                "HEAD", _make_path("_component_template", name)
+            )
+
         ops_count = 0
         for template_name in template_names:
             if not only_if_exists:
                 await es.cluster.delete_component_template(name=template_name, params=request_params, ignore=[404])
                 ops_count += 1
-            elif only_if_exists and await self._exists(template_name):
+            elif only_if_exists and await _exists(template_name):
                 self.logger.info("Component Index template [%s] already exists. Deleting it.", template_name)
                 await es.cluster.delete_component_template(name=template_name, params=request_params)
                 ops_count += 1
         return ops_count, "ops"
-
-    async def _exists(self, name):
-        return await self.transport.perform_request(
-            "HEAD", _make_path("_component_template", name)
-        )
 
     def __repr__(self, *args, **kwargs):
         return "delete-component-template"
